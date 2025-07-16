@@ -110,43 +110,6 @@ class VirusTotalTool:
         
         return result or {"error": "No data available"}
     
-    def analyze_file_path(self, file_path: str) -> Dict:
-        """Analyze file path by searching for the filename"""
-        try:
-            # Extract filename from path
-            filename = file_path.split('\\')[-1].split('/')[-1]
-            
-            # Search for files with this name
-            result = self._make_request("search", params={"query": f"name:{filename}"})
-            
-            if result and "data" in result:
-                files = result["data"]
-                if not files:
-                    return {"error": "No files found with this name"}
-                
-                # Analyze the most relevant file (first result)
-                file_info = files[0]
-                attributes = file_info.get("attributes", {})
-                stats = attributes.get("last_analysis_stats", {})
-                
-                return {
-                    "total_votes": sum(stats.values()) if stats else 0,
-                    "malicious": stats.get("malicious", 0),
-                    "suspicious": stats.get("suspicious", 0),
-                    "clean": stats.get("harmless", 0) + stats.get("undetected", 0),
-                    "file_type": attributes.get("type_description", "Unknown"),
-                    "file_size": attributes.get("size", 0),
-                    "names": attributes.get("names", []),
-                    "signature_info": attributes.get("signature_info", {}),
-                    "scan_results": self._format_scan_results(attributes.get("last_analysis_results", {})),
-                    "search_count": len(files)
-                }
-            
-            return result or {"error": "Search failed"}
-            
-        except Exception as e:
-            return {"error": f"File path analysis error: {str(e)}"}
-    
     def _format_scan_results(self, scan_results: Dict) -> Dict:
         """Format scan results for better readability"""
         formatted = {
@@ -174,8 +137,6 @@ class VirusTotalTool:
                 result = self.analyze_url(query)
             elif object_type == "file_hash":
                 result = self.analyze_file_hash(query)
-            elif object_type == "file_path":
-                result = self.analyze_file_path(query)
             elif object_type == "ip_address":
                 result = self.analyze_ip(query)
             else:
@@ -183,7 +144,7 @@ class VirusTotalTool:
             
             if "error" in result:
                 error_msg = result['error']
-                if "not found" in error_msg.lower() or "no files found" in error_msg.lower():
+                if "not found" in error_msg.lower():
                     return f"VirusTotal: No analysis data found for this {object_type}"
                 elif "rate limit" in error_msg.lower():
                     return "VirusTotal: Rate limit exceeded - unable to analyze at this time"
@@ -194,20 +155,14 @@ class VirusTotalTool:
             
             malicious = result.get("malicious", 0)
             total = result.get("total_votes", 0)
-            search_count = result.get("search_count", 0)
             
             if total == 0:
                 return f"VirusTotal: No analysis data available for this {object_type}"
             
-            summary = ""
-            if object_type == "file_path" and search_count > 0:
-                filename = query.split('\\')[-1].split('/')[-1]
-                summary = f"VirusTotal: Found {search_count} file(s) named '{filename}' - "
-            
             if malicious > 0:
-                return f"{summary}DETECTED as malicious by {malicious}/{total} engines - THREAT CONFIRMED"
+                return f"VirusTotal: DETECTED as malicious by {malicious}/{total} engines - THREAT CONFIRMED"
             else:
-                return f"{summary}CLEAN - No threats detected by {total} engines"
+                return f"VirusTotal: CLEAN - No threats detected by {total} engines"
                 
         except Exception as e:
             return f"VirusTotal: Analysis error - {str(e)}" 

@@ -115,48 +115,6 @@ class AlienVaultTool:
         except Exception as e:
             return {"error": f"IP analysis error: {str(e)}"}
     
-    def analyze_file_path(self, file_path: str) -> Dict:
-        """Analyze file path by searching for the filename"""
-        try:
-            # Extract filename from path
-            filename = file_path.split('\\')[-1].split('/')[-1]
-            
-            # Search for indicators related to this filename
-            result = self._make_request(f"search/general", params={"q": filename})
-            
-            if result and not result.get("error"):
-                results = result.get("results", [])
-                
-                # Filter for file indicators
-                file_indicators = [r for r in results if r.get("type") in ["FileHash-MD5", "FileHash-SHA1", "FileHash-SHA256"]]
-                
-                if file_indicators:
-                    # Get pulse information for the first file indicator
-                    first_hash = file_indicators[0].get("indicator", "")
-                    pulse_result = self._make_request(f"indicators/file/{first_hash}/general")
-                    
-                    if pulse_result and not pulse_result.get("error"):
-                        pulse_info = pulse_result.get("pulse_info", {})
-                        
-                        return {
-                            "pulses": pulse_info.get("count", 0),
-                            "references": pulse_info.get("references", []),
-                            "malware_families": self._extract_malware_families(pulse_info.get("pulses", [])),
-                            "threat_types": self._extract_threat_types(pulse_info.get("pulses", [])),
-                            "reputation_score": self._calculate_reputation_score(pulse_info),
-                            "first_seen": self._get_first_seen(pulse_info.get("pulses", [])),
-                            "tags": self._extract_tags(pulse_info.get("pulses", [])),
-                            "filename": filename,
-                            "related_hashes": len(file_indicators)
-                        }
-                
-                return {"pulses": 0, "filename": filename, "related_hashes": 0}
-            
-            return result or {"error": "Search failed"}
-            
-        except Exception as e:
-            return {"error": f"File path analysis error: {str(e)}"}
-    
     def _extract_malware_families(self, pulses: List[Dict]) -> List[str]:
         """Extract malware families from pulses"""
         families = set()
@@ -213,8 +171,6 @@ class AlienVaultTool:
                 result = self.analyze_url(query)
             elif object_type == "file_hash":
                 result = self.analyze_file_hash(query)
-            elif object_type == "file_path":
-                result = self.analyze_file_path(query)
             elif object_type == "ip_address":
                 result = self.analyze_ip(query)
             else:
@@ -222,7 +178,7 @@ class AlienVaultTool:
             
             if "error" in result:
                 error_msg = result['error']
-                if "not found" in error_msg.lower() or "search failed" in error_msg.lower():
+                if "not found" in error_msg.lower():
                     return f"AlienVault OTX: No threat intelligence found for this {object_type}"
                 elif "rate limit" in error_msg.lower():
                     return "AlienVault OTX: Rate limit exceeded - unable to analyze at this time"
@@ -234,18 +190,11 @@ class AlienVaultTool:
             pulse_count = result.get("pulses", 0)
             threat_types = result.get("threat_types", [])
             malware_families = result.get("malware_families", [])
-            related_hashes = result.get("related_hashes", 0)
-            filename = result.get("filename", "")
             
             if pulse_count == 0:
-                if object_type == "file_path" and related_hashes > 0:
-                    return f"AlienVault OTX: Found {related_hashes} hash(es) for '{filename}' but no threat pulses"
                 return f"AlienVault OTX: No threat intelligence found for this {object_type}"
             
             summary = f"AlienVault OTX: THREAT DETECTED - Found {pulse_count} threat pulse(s)"
-            
-            if object_type == "file_path" and filename:
-                summary += f" for file '{filename}'"
             
             if threat_types:
                 summary += f" - Threat types: {', '.join(threat_types[:3])}"

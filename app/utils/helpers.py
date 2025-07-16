@@ -14,35 +14,17 @@ def classify_object(query: str) -> str:
     if validators.url(query) or re.match(r'https?://|www\.|\.(com|vn|org|net|edu|gov)', query):
         return 'url'
     
-    # File hash detection (MD5, SHA1, SHA256) - more precise regex
-    if re.match(r'^[a-fA-F0-9]{32}$', query):  # MD5
+    # File hash detection (MD5, SHA1, SHA256)
+    if re.match(r'^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{40}$|^[a-fA-F0-9]{64}$', query):
         return 'file_hash'
-    if re.match(r'^[a-fA-F0-9]{40}$', query):  # SHA1
-        return 'file_hash'
-    if re.match(r'^[a-fA-F0-9]{64}$', query):  # SHA256
-        return 'file_hash'
+    
+    # File path detection
+    if re.match(r'^[C-Z]:\\|^/[a-zA-Z]|\\\\|\.exe$|\.dll$', query):
+        return 'file_path'
     
     # IP address detection
     if re.match(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', query):
         return 'ip_address'
-    
-    # File path detection - improved patterns
-    if re.match(r'^[A-Za-z]:\\', query):  # Windows path like C:\
-        return 'file_path'
-    if re.match(r'^\\\\', query):  # UNC path
-        return 'file_path'
-    if re.match(r'^/', query):  # Unix/Linux path
-        return 'file_path'
-    if query.endswith(('.exe', '.dll', '.sys', '.bat', '.cmd', '.scr', '.com', '.pif')):
-        return 'file_path'
-    
-    # Enhanced file path detection for queries containing file info
-    if any(keyword in query.lower() for keyword in ['file ', 'check ', '.exe', '.dll', 'có độc hại', 'kiểm tra']):
-        # Extract potential file path from query
-        parts = query.split()
-        for part in parts:
-            if '\\' in part or part.endswith(('.exe', '.dll', '.sys')):
-                return 'file_path'
     
     # Process name detection
     if re.search(r'\.exe|\.dll|svchost|explorer|winlogon|lsass|csrss', query, re.IGNORECASE):
@@ -112,49 +94,3 @@ def is_legitimate_windows_path(path: str) -> bool:
     ]
     
     return any(re.match(pattern, path, re.IGNORECASE) for pattern in legitimate_patterns) 
-
-def extract_file_path_from_query(query: str) -> str:
-    """Extract file path from complex queries"""
-    query = query.strip()
-    
-    # If the query starts with a direct path, return it
-    if re.match(r'^[A-Za-z]:\\', query) or re.match(r'^\\\\', query):
-        # Extract just the path part
-        parts = query.split()
-        if parts:
-            return parts[0]
-    
-    # Look for file paths in the query
-    parts = query.split()
-    for part in parts:
-        if '\\' in part and (part.endswith('.exe') or part.endswith('.dll') or part.endswith('.sys')):
-            return part
-        if re.match(r'^[A-Za-z]:\\', part):
-            return part
-    
-    # Try to find patterns like "File something.dll có hash"
-    import re
-    file_pattern = r'[A-Za-z]:[\\][^\\]+(?:\\[^\\]+)*\.[a-zA-Z]{2,4}'
-    match = re.search(file_pattern, query)
-    if match:
-        return match.group()
-    
-    # If no clear path found, return the original query
-    return query
-
-def extract_hash_from_query(query: str) -> str:
-    """Extract hash from complex queries"""
-    # Look for hash patterns in the query
-    words = query.split()
-    for word in words:
-        # Check for MD5 (32 chars)
-        if re.match(r'^[a-fA-F0-9]{32}$', word):
-            return word
-        # Check for SHA1 (40 chars)
-        if re.match(r'^[a-fA-F0-9]{40}$', word):
-            return word
-        # Check for SHA256 (64 chars)
-        if re.match(r'^[a-fA-F0-9]{64}$', word):
-            return word
-    
-    return query 
